@@ -1,0 +1,190 @@
+import pygame
+import random
+import math
+import os
+
+# ==========================================
+# PROJEKT: HELD IM ERDBEERFELD (Die Wir-Maschine)
+# VERSION: 0.5 - "Die Sinfonie des Willens"
+# VISION: Dein Handeln hallt wie eine Welle nach.
+# ==========================================
+
+WIDTH, HEIGHT = 800, 600
+FPS = 60
+
+# Farben
+STRAWBERRY_RED = (220, 20, 60)
+HAPPY_BLUE = (30, 144, 255)
+CHAOS_GREY = (60, 60, 70)
+RADIANT_GOLD = (255, 225, 100)
+BOOSTER_CYAN = (0, 255, 255)
+DARK_SPACE = (8, 8, 15)
+
+pygame.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("🍓 Wir-Maschine v0.5 - Die Sinfonie")
+clock = pygame.time.Clock()
+font_big = pygame.font.SysFont("Arial", 22, bold=True)
+
+# --- Speicher-Logik ---
+SCORE_FILE = "resonanz_bilanz.txt"
+def lade_bilanz():
+    if os.path.exists(SCORE_FILE):
+        with open(SCORE_FILE, "r") as f:
+            try: return int(f.read())
+            except: return 0
+    return 0
+
+def speichere_bilanz(score):
+    with open(SCORE_FILE, "w") as f:
+        f.write(str(score))
+
+# --- Neue Klasse für die Resonanz-Welle ---
+class ResonanzWelle:
+    def __init__(self, x, y, color):
+        self.x, self.y = x, y
+        self.radius = 0
+        self.max_radius = 400
+        self.alpha = 255
+        self.color = color
+        self.alive = True
+
+    def update(self):
+        self.radius += 5
+        self.alpha -= 4
+        if self.alpha <= 0 or self.radius >= self.max_radius:
+            self.alive = False
+
+    def draw(self, surface):
+        if self.alive:
+            # Wir zeichnen einen Kreis mit schwindender Deckkraft
+            s = pygame.Surface((self.radius*2, self.radius*2), pygame.SRCALPHA)
+            pygame.draw.circle(s, (*self.color, self.alpha), (self.radius, self.radius), self.radius, width=2)
+            surface.blit(s, (self.x - self.radius, self.y - self.radius))
+
+class Partner:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.energy = 0
+        self.active = False
+        self.radius = 12
+        self.highlight = 0 # Für den Wellen-Effekt
+
+    def receive_energy(self, amount):
+        if not self.active:
+            self.energy = min(100, self.energy + amount)
+            if self.energy >= 100:
+                self.active = True
+                return True
+        return False
+
+    def draw(self, surface):
+        color = HAPPY_BLUE if self.active else CHAOS_GREY
+        if self.highlight > 0:
+            pygame.draw.circle(surface, RADIANT_GOLD, (self.x, self.y), self.radius + self.highlight, width=1)
+            self.highlight -= 1
+        
+        pygame.draw.circle(surface, color, (self.x, self.y), self.radius, width=(0 if self.active else 1))
+        if not self.active:
+            pygame.draw.rect(surface, HAPPY_BLUE, (self.x-10, self.y+15, (self.energy/100)*20, 3))
+
+class Core:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.base_radius = 45
+        self.shield_power = 0
+        self.is_flashing = False
+        self.flash_timer = 0
+        self.pulse = 0
+
+    def boost(self):
+        self.shield_power = min(100, self.shield_power + 25)
+
+    def update(self):
+        self.pulse += 0.05
+        if self.shield_power > 0: self.shield_power -= 0.6
+        if self.is_flashing:
+            self.flash_timer -= 1
+            if self.flash_timer <= 0: self.is_flashing = False
+
+    def hit(self, partners, wellen):
+        self.is_flashing = True
+        self.flash_timer = 12
+        new_awakened = 0
+        # Welle vom Kern aussenden
+        wellen.append(ResonanzWelle(self.x, self.y, BOOSTER_CYAN))
+        
+        for p in partners:
+            dist = math.hypot(self.x - p.x, self.y - p.y)
+            if dist < 250:
+                if p.receive_energy(20 + (self.shield_power * 0.5)):
+                    new_awakened += 1
+                    # Jede neue Seele sendet eine eigene Welle!
+                    wellen.append(ResonanzWelle(p.x, p.y, STRAWBERRY_RED))
+        return new_awakened
+
+    def draw(self, surface):
+        r = self.base_radius + math.sin(self.pulse) * 3
+        if self.shield_power > 0:
+            pygame.draw.circle(surface, BOOSTER_CYAN, (self.x, self.y), r + 15 + (self.shield_power * 0.2), width=2)
+        if self.is_flashing:
+            pygame.draw.circle(surface, RADIANT_GOLD, (self.x, self.y), r + 10)
+        pygame.draw.circle(surface, HAPPY_BLUE, (self.x, self.y), r + 5, width=3)
+        pygame.draw.circle(surface, STRAWBERRY_RED, (self.x, self.y), r)
+
+def main():
+    running = True
+    total_awakened = lade_bilanz()
+    my_core = Core(WIDTH//2, HEIGHT//2)
+    partners = [Partner(random.randint(50, WIDTH-50), random.randint(50, HEIGHT-50)) for _ in range(12)]
+    particles = []
+    wellen = []
+    
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                speichere_bilanz(total_awakened)
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE: 
+                    my_core.boost()
+                    wellen.append(ResonanzWelle(my_core.x, my_core.y, HAPPY_BLUE))
+
+        if random.random() < 0.05:
+            particles.append({'x': random.choice([-20, 820]), 'y': random.randint(0, 600), 'speed': random.uniform(2, 5)})
+        
+        screen.fill(DARK_SPACE)
+        my_core.update()
+        
+        for w in wellen[:]:
+            w.update()
+            if not w.alive: wellen.remove(w)
+            else: 
+                w.draw(screen)
+                # Check: Berührt Welle einen Partner?
+                for p in partners:
+                    if not p.active and math.hypot(w.x - p.x, w.y - p.y) < w.radius:
+                        p.highlight = 5
+
+        for p in partners: p.draw(screen)
+        
+        for p in particles[:]:
+            dx, dy = my_core.x - p['x'], my_core.y - p['y']
+            dist = math.hypot(dx, dy)
+            p['x'] += (dx/dist) * p['speed']
+            p['y'] += (dy/dist) * p['speed']
+            if dist < 45:
+                total_awakened += my_core.hit(partners, wellen)
+                particles.remove(p)
+            else:
+                pygame.draw.circle(screen, CHAOS_GREY, (int(p['x']), int(p['y'])), 5)
+        
+        my_core.draw(screen)
+        txt = font_big.render(f"Ewige Resonanz: {total_awakened}", True, RADIANT_GOLD)
+        screen.blit(txt, (20, 10))
+        pygame.display.flip()
+        clock.tick(FPS)
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
