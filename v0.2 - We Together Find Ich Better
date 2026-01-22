@@ -1,0 +1,156 @@
+import pygame
+import random
+import math
+
+# ==========================================
+# PROJEKT: HELD IM ERDBEERFELD (Die Wir-Maschine)
+# VERSION: 0.2 - "Das Wir-Netz"
+# LIZENZ: MIT - "Du sollst nicht, darf ich wenn du möchtest."
+# ==========================================
+
+WIDTH, HEIGHT = 800, 600
+FPS = 60
+
+# Farben (Deine Glücks-Palette)
+STRAWBERRY_RED = (220, 20, 60)
+HAPPY_BLUE = (30, 144, 255)
+CHAOS_GREY = (80, 80, 80)
+RADIANT_GOLD = (255, 225, 100)
+DARK_SPACE = (15, 15, 25)
+
+pygame.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("🍓 Wir-Maschine v0.2 - Das Netzwerk wächst")
+clock = pygame.time.Clock()
+font = pygame.font.SysFont("Arial", 20, bold=True)
+
+# ==========================================
+# KLASSE: PARTNER (Die anderen Seelen)
+# ==========================================
+class Partner:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.energy = 0
+        self.active = False
+        self.radius = 15
+        self.activation_threshold = 100 # Wieviel Licht braucht man zum Erwachen?
+
+    def receive_energy(self, amount):
+        if not self.active:
+            self.energy += amount
+            if self.energy >= self.activation_threshold:
+                self.active = True
+                return True
+        return False
+
+    def draw(self, surface):
+        if self.active:
+            # Erwacht: Blau-Roter Schimmer
+            pygame.draw.circle(surface, HAPPY_BLUE, (self.x, self.y), self.radius + 4, width=2)
+            pygame.draw.circle(surface, STRAWBERRY_RED, (self.x, self.y), self.radius)
+        else:
+            # Still: Grau und wartend
+            pygame.draw.circle(surface, CHAOS_GREY, (self.x, self.y), self.radius, width=1)
+            # Kleiner Ladebalken für die Energie
+            fill_h = (self.energy / self.activation_threshold) * (self.radius * 2)
+            pygame.draw.rect(surface, HAPPY_BLUE, (self.x - self.radius, self.y + self.radius + 5, fill_h, 4))
+
+# ==========================================
+# KLASSE: HAUPT-KERN (Der Manuel-Motor)
+# ==========================================
+class Core:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.base_radius = 40
+        self.time = 0
+        self.is_flashing = False
+        self.flash_timer = 0
+        self.connections = [] # Speichert, wohin der letzte Blitz ging
+
+    def update(self):
+        self.time += 0.05
+        self.current_radius = self.base_radius + math.sin(self.time) * 4
+        if self.is_flashing:
+            self.flash_timer -= 1
+            if self.flash_timer <= 0:
+                self.is_flashing = False
+                self.connections = []
+
+    def hit(self, partners):
+        self.is_flashing = True
+        self.flash_timer = 10
+        # Energie an die 3 nächsten Partner senden
+        targets = sorted(partners, key=lambda p: math.dist((self.x, self.y), (p.x, p.y)))[:3]
+        for t in targets:
+            if t.receive_energy(35): # Ein fetter Stoß Energie
+                print("💥 Eine weitere Seele ist erwacht!")
+            self.connections.append((t.x, t.y))
+
+    def draw(self, surface):
+        # Zeichne Verbindungs-Blitze
+        for target_pos in self.connections:
+            pygame.draw.line(surface, RADIANT_GOLD, (self.x, self.y), target_pos, width=3)
+
+        if self.is_flashing:
+            pygame.draw.circle(surface, RADIANT_GOLD, (self.x, self.y), self.current_radius + 15)
+        
+        pygame.draw.circle(surface, HAPPY_BLUE, (self.x, self.y), self.current_radius + 6, width=3)
+        pygame.draw.circle(surface, STRAWBERRY_RED, (self.x, self.y), self.current_radius)
+
+class Particle:
+    def __init__(self, tx, ty):
+        self.x, self.y = random.choice([(0, random.randint(0, HEIGHT)), (WIDTH, random.randint(0, HEIGHT)), (random.randint(0, WIDTH), 0)])
+        self.tx, self.ty = tx, ty
+        self.speed = random.uniform(3, 6)
+        self.alive = True
+
+    def update(self):
+        dx, dy = self.tx - self.x, self.ty - self.y
+        dist = math.hypot(dx, dy)
+        if dist > 5:
+            self.x += (dx/dist) * self.speed
+            self.y += (dy/dist) * self.speed
+        if dist < 40: self.alive = False; return True
+        return False
+
+    def draw(self, surface):
+        pygame.draw.circle(surface, CHAOS_GREY, (int(self.x), int(self.y)), 6)
+
+# --- Main Loop ---
+def main():
+    running = True
+    my_core = Core(WIDTH//2, HEIGHT//2)
+    partners = [Partner(random.randint(50, WIDTH-50), random.randint(50, HEIGHT-50)) for _ in range(8)]
+    particles = []
+    activated_count = 0
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: running = False
+
+        if random.random() < 0.04: particles.append(Particle(my_core.x, my_core.y))
+
+        screen.fill(DARK_SPACE)
+        
+        my_core.update()
+        for p in partners: p.draw(screen)
+        
+        for p in particles[:]:
+            if p.update():
+                my_core.hit(partners)
+                particles.remove(p)
+            p.draw(screen)
+        
+        my_core.draw(screen)
+        
+        activated_count = sum(1 for p in partners if p.active)
+        info = font.render(f"Erwachte Seelen: {activated_count} / {len(partners)}", True, HAPPY_BLUE)
+        screen.blit(info, (20, 20))
+
+        pygame.display.flip()
+        clock.tick(FPS)
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
