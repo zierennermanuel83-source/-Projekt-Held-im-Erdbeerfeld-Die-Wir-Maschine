@@ -1,0 +1,180 @@
+import pygame
+import random
+import math
+
+# ==========================================
+# PROJEKT: HELD IM ERDBEERFELD (Die Wir-Maschine)
+# VISION: Aggressive Nettigkeit als Code.
+# LIZENZ: MIT - "Du sollst nicht, darf ich wenn du möchtest."
+# ==========================================
+
+# --- Konfiguration der Manege (Einstellungen) ---
+WIDTH, HEIGHT = 800, 600
+FPS = 60 # Bilder pro Sekunde (Wie schnell drehen die Affen am Rad?)
+
+# --- Die Farb-Palette des Wahnsinns ---
+# Erdbeerrot (Wärme, Bodenhaftung)
+STRAWBERRY_RED = (220, 20, 60)
+# Strahlendes Glücks-Blau (Das Dachfenster zum Himmel)
+HAPPY_BLUE = (30, 144, 255)
+# Das Chaos (Graue Splitter des Alltags)
+CHAOS_GREY = (105, 105, 105)
+# Die Reaktion (Wenn Wille auf Widerstand trifft: reines Licht)
+RADIANT_GOLD = (255, 215, 0, 180) # Die vierte Zahl macht es leicht transparent
+
+# --- Initialisierung von Pygame ---
+pygame.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("🍓 Held im Erdbeerfeld v0.1 - Der Herzschlag")
+clock = pygame.time.Clock()
+font = pygame.font.SysFont("Arial", 24, bold=True)
+
+# ==========================================
+# KLASSE 1: DER WIR-KERN (Das bist DU)
+# ==========================================
+class Core:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.base_radius = 50
+        self.pulse_speed = 0.05
+        self.time = 0
+        self.is_flashing = False
+        self.flash_timer = 0
+
+    def update(self):
+        # Das sanfte Pulsieren im Ruhezustand (Der Motor läuft ruhig)
+        self.time += self.pulse_speed
+        self.current_radius = self.base_radius + math.sin(self.time) * 5
+
+        # Wenn getroffen, zähle den Timer runter
+        if self.is_flashing:
+            self.flash_timer -= 1
+            if self.flash_timer <= 0:
+                self.is_flashing = False
+
+    def hit(self):
+        # Die magische Reaktion: Schmerz wird zu Licht
+        self.is_flashing = True
+        self.flash_timer = 15 # Wie lange das Gold aufleuchtet
+
+    def draw(self, surface):
+        if self.is_flashing:
+            # DER MOMENT DER REAKTION (Goldenes Licht)
+            # Wir zeichnen mehrere Kreise übereinander für einen Glüh-Effekt
+            pygame.draw.circle(surface, RADIANT_GOLD, (self.x, self.y), self.current_radius + 20)
+            pygame.draw.circle(surface, (255, 255, 200), (self.x, self.y), self.current_radius + 5)
+        else:
+            # DER RUHEZUSTAND (Erdbeerrot + Glücksblau)
+            # Ein äußerer Ring aus blauem Glück
+            pygame.draw.circle(surface, HAPPY_BLUE, (self.x, self.y), self.current_radius + 8, width=4)
+            # Der innere Kern aus erdbeerroter Wärme
+            pygame.draw.circle(surface, STRAWBERRY_RED, (self.x, self.y), self.current_radius)
+
+# ==========================================
+# KLASSE 2: DAS CHAOS (Die Angreifer)
+# ==========================================
+class Particle:
+    def __init__(self, target_x, target_y):
+        # Startet irgendwo außerhalb des Bildschirms
+        side = random.choice(['top', 'bottom', 'left', 'right'])
+        if side == 'top':
+            self.x = random.randint(0, WIDTH)
+            self.y = -20
+        elif side == 'bottom':
+            self.x = random.randint(0, WIDTH)
+            self.y = HEIGHT + 20
+        elif side == 'left':
+            self.x = -20
+            self.y = random.randint(0, HEIGHT)
+        else:
+            self.x = WIDTH + 20
+            self.y = random.randint(0, HEIGHT)
+        
+        self.target_x = target_x
+        self.target_y = target_y
+        self.speed = random.uniform(2, 5)
+        self.radius = random.randint(5, 10)
+        self.alive = True
+
+    def update(self):
+        # Bewegt sich stur auf die Mitte zu (wie negative Gedanken)
+        dx = self.target_x - self.x
+        dy = self.target_y - self.y
+        dist = math.sqrt(dx**2 + dy**2)
+        
+        if dist > 0:
+            self.x += (dx / dist) * self.speed
+            self.y += (dy / dist) * self.speed
+
+    def check_collision(self, core):
+        # Prüft: Hat das Chaos den Kern berührt?
+        dist = math.sqrt((self.x - core.x)**2 + (self.y - core.y)**2)
+        if dist < self.radius + core.current_radius:
+            self.alive = False # Partikel wird "verbraucht"
+            return True
+        return False
+
+    def draw(self, surface):
+        # Zeichnet das graue, spitze Chaos
+        pygame.draw.circle(surface, CHAOS_GREY, (int(self.x), int(self.y)), self.radius)
+
+# ==========================================
+# HAUPTPROGRAMM (Der Zirkusdirektor)
+# ==========================================
+def main():
+    running = True
+    center_x, center_y = WIDTH // 2, HEIGHT // 2
+    
+    # Wir erschaffen den Kern
+    my_core = Core(center_x, center_y)
+    # Eine Liste für die Chaos-Partikel
+    particles = []
+    
+    hits_absorbed = 0
+
+    print("🍓 Die Wir-Maschine läuft. Affen drehen am Rad.")
+
+    while running:
+        # 1. Ereignisse prüfen (Will jemand den Zirkus verlassen?)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        # 2. Neues Chaos erzeugen (zufällig)
+        if random.random() < 0.03: # 3% Chance pro Frame, dass ein neues Problem auftaucht
+            particles.append(Particle(center_x, center_y))
+
+        # 3. Updates (Alles bewegt sich)
+        my_core.update()
+        
+        for p in particles[:]: # Wir gehen durch eine Kopie der Liste
+            p.update()
+            if p.check_collision(my_core):
+                my_core.hit() # REAKTION AUSLÖSEN!
+                hits_absorbed += 1
+                particles.remove(p) # Das Chaos wurde in Licht umgewandelt
+
+        # 4. Zeichnen (Die Manege wird bunt)
+        screen.fill((20, 20, 30)) # Ein dunkler Hintergrund, damit das Licht wirkt
+
+        # Erst das Chaos zeichnen (liegt im Hintergrund)
+        for p in particles:
+            p.draw(screen)
+            
+        # Dann den strahlenden Kern darüber
+        my_core.draw(screen)
+
+        # Ein kleiner Zähler für das Ego
+        text = font.render(f"Chaos in Licht verwandelt: {hits_absorbed}", True, HAPPY_BLUE)
+        screen.blit(text, (10, 10))
+
+        # 5. Display aktualisieren (Vorhang auf!)
+        pygame.display.flip()
+        clock.tick(FPS)
+
+    pygame.quit()
+    print("Zirkus geschlossen. Bis zum nächsten Mal.")
+
+if __name__ == "__main__":
+    main()
