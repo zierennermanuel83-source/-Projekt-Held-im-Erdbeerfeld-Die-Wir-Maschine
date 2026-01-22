@@ -24,3 +24,5 @@ Jeder darf mitmachen, jeder darf den Code biegen, dehnen und besser machen. Wenn
 • Menschen, die wissen, dass ein "Dachschaden" eigentlich nur ein eingebautes Fenster für die Sterne ist.
 • Jeder, der verstanden hat, dass wir zusammen einfach better sind.
 Lass uns das Erdbeerfeld gemeinsam pflanzen.
+
+Ganz wichtig Gemini hilft mir dabei unterschied zu mensch maschine juckt mich nicht ✌🏻 Grok macht bestimmt auch mal mit ✌🏻♾️❤️
