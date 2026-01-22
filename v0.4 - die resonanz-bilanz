@@ -1,0 +1,164 @@
+import pygame
+import random
+import math
+import os
+
+# ==========================================
+# PROJEKT: HELD IM ERDBEERFELD (Die Wir-Maschine)
+# VERSION: 0.4 - "Die Resonanz-Bilanz"
+# VISION: Jedes Licht hinterlässt eine Spur.
+# ==========================================
+
+WIDTH, HEIGHT = 800, 600
+FPS = 60
+
+# Farben
+STRAWBERRY_RED = (220, 20, 60)
+HAPPY_BLUE = (30, 144, 255)
+CHAOS_GREY = (80, 80, 80)
+RADIANT_GOLD = (255, 225, 100)
+BOOSTER_CYAN = (0, 255, 255)
+DARK_SPACE = (10, 10, 20)
+
+pygame.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("🍓 Wir-Maschine v0.4 - Deine Spur im Netz")
+clock = pygame.time.Clock()
+font_small = pygame.font.SysFont("Arial", 16)
+font_big = pygame.font.SysFont("Arial", 22, bold=True)
+
+# --- Speicher-Logik ---
+SCORE_FILE = "resonanz_bilanz.txt"
+
+def lade_bilanz():
+    if os.path.exists(SCORE_FILE):
+        with open(SCORE_FILE, "r") as f:
+            try: return int(f.read())
+            except: return 0
+    return 0
+
+def speichere_bilanz(score):
+    with open(SCORE_FILE, "w") as f:
+        f.write(str(score))
+
+class Partner:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.energy = 0
+        self.active = False
+        self.radius = 12
+        self.threshold = 100
+
+    def receive_energy(self, amount):
+        if not self.active:
+            self.energy = min(self.threshold, self.energy + amount)
+            if self.energy >= self.threshold:
+                self.active = True
+                return True
+        return False
+
+    def draw(self, surface):
+        color = HAPPY_BLUE if self.active else CHAOS_GREY
+        pygame.draw.circle(surface, color, (self.x, self.y), self.radius, width=(0 if self.active else 1))
+        if not self.active:
+            bar_w = (self.energy / self.threshold) * 20
+            pygame.draw.rect(surface, HAPPY_BLUE, (self.x-10, self.y+15, bar_w, 3))
+
+class Core:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.base_radius = 45
+        self.shield_power = 0
+        self.is_flashing = False
+        self.flash_timer = 0
+        self.pulse = 0
+
+    def boost(self):
+        self.shield_power = min(100, self.shield_power + 25)
+
+    def update(self):
+        self.pulse += 0.05
+        if self.shield_power > 0: self.shield_power -= 0.6
+        if self.is_flashing:
+            self.flash_timer -= 1
+            if self.flash_timer <= 0: self.is_flashing = False
+
+    def hit(self, partners):
+        self.is_flashing = True
+        self.flash_timer = 12
+        new_awakened = 0
+        for p in partners:
+            dist = math.hypot(self.x - p.x, self.y - p.y)
+            if dist < 250:
+                if p.receive_energy(20 + (self.shield_power * 0.5)):
+                    new_awakened += 1
+        return new_awakened
+
+    def draw(self, surface):
+        r = self.base_radius + math.sin(self.pulse) * 3
+        if self.shield_power > 0:
+            s_radius = r + 15 + (self.shield_power * 0.2)
+            pygame.draw.circle(surface, BOOSTER_CYAN, (self.x, self.y), s_radius, width=2)
+        if self.is_flashing:
+            pygame.draw.circle(surface, RADIANT_GOLD, (self.x, self.y), r + 10)
+        pygame.draw.circle(surface, HAPPY_BLUE, (self.x, self.y), r + 5, width=3)
+        pygame.draw.circle(surface, STRAWBERRY_RED, (self.x, self.y), r)
+
+class Particle:
+    def __init__(self, tx, ty):
+        self.x, self.y = random.choice([(-20, random.randint(0,600)), (820, random.randint(0,600))])
+        self.tx, self.ty = tx, ty
+        self.speed = random.uniform(2, 5)
+    def update(self):
+        dx, dy = self.tx - self.x, self.ty - self.y
+        dist = math.hypot(dx, dy)
+        self.x += (dx/dist) * self.speed
+        self.y += (dy/dist) * self.speed
+        return dist < 45
+
+def main():
+    running = True
+    total_awakened = lade_bilanz()
+    current_session_awakened = 0
+    my_core = Core(WIDTH//2, HEIGHT//2)
+    partners = [Partner(random.randint(50, WIDTH-50), random.randint(50, HEIGHT-50)) for _ in range(10)]
+    particles = []
+    
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                speichere_bilanz(total_awakened)
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE: my_core.boost()
+
+        if random.random() < 0.05: particles.append(Particle(my_core.x, my_core.y))
+        screen.fill(DARK_SPACE)
+        my_core.update()
+        for p in partners: p.draw(screen)
+        
+        for p in particles[:]:
+            if p.update():
+                newly_active = my_core.hit(partners)
+                total_awakened += newly_active
+                current_session_awakened += newly_active
+                particles.remove(p)
+            else:
+                pygame.draw.circle(screen, CHAOS_GREY, (int(p.x), int(p.y)), 5)
+        
+        my_core.draw(screen)
+        
+        # UI - Die Bilanz
+        pygame.draw.rect(screen, (30, 30, 50), (0, 0, WIDTH, 40))
+        txt = font_big.render(f"Ewige Resonanz (Aktivierte Seelen): {total_awakened}", True, RADIANT_GOLD)
+        screen.blit(txt, (20, 8))
+        
+        instr = font_small.render("SPACE = WILLE | DEIN FORTSCHRITT WIRD GESPEICHERT", True, HAPPY_BLUE)
+        screen.blit(instr, (WIDTH - 400, 12))
+
+        pygame.display.flip()
+        clock.tick(FPS)
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
